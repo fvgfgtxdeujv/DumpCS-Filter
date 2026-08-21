@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Terminal
@@ -19,14 +20,16 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import com.dumpcs.filter.ui.viewmodel.DumpViewModel
+import com.dumpcs.filter.ui.viewmodel.ExplorerViewModel
 import com.dumpcs.filter.ui.viewmodel.MainViewModel
 import com.dumpcs.filter.ui.viewmodel.ScriptViewModel
 import kotlinx.coroutines.launch
 
 /**
- * 主界面三页容器：查找 / Dump / 脚本
+ * 主界面四页容器：查找 / Dump / 脚本 / 浏览
  * - HorizontalPager 左右滑动切换，跟手流畅
  * - 底部导航点击与滑动双向联动
+ * - 浏览页 = DumpCsExplorer-Mobile 功能（树形浏览/搜索/收藏/Hook 模板）
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -34,9 +37,10 @@ fun MainTabsScreen(
     navController: NavHostController,
     viewModel: MainViewModel,
     dumpViewModel: DumpViewModel,
-    scriptViewModel: ScriptViewModel
+    scriptViewModel: ScriptViewModel,
+    explorerViewModel: ExplorerViewModel
 ) {
-    val pagerState = rememberPagerState(initialPage = 0) { 3 }
+    val pagerState = rememberPagerState(initialPage = 0) { 4 }
     val scope = rememberCoroutineScope()
 
     Scaffold(
@@ -60,6 +64,12 @@ fun MainTabsScreen(
                     icon = { Icon(Icons.Outlined.Terminal, contentDescription = null) },
                     label = { Text("脚本") }
                 )
+                NavigationBarItem(
+                    selected = pagerState.currentPage == 3,
+                    onClick = { scope.launch { pagerState.animateScrollToPage(3) } },
+                    icon = { Icon(Icons.Default.AccountTree, contentDescription = null) },
+                    label = { Text("浏览") }
+                )
             }
         }
     ) { innerPadding ->
@@ -76,7 +86,8 @@ fun MainTabsScreen(
                     dumpViewModel = dumpViewModel,
                     mainViewModel = viewModel
                 )
-                else -> ScriptScreen(navController = navController, vm = scriptViewModel)
+                2 -> ScriptScreen(navController = navController, vm = scriptViewModel)
+                else -> ExplorerScreen(vm = explorerViewModel)
             }
         }
     }

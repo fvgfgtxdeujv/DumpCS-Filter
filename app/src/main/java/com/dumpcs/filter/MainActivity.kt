@@ -45,7 +45,6 @@ import com.dumpcs.filter.ui.screens.DumpScreen
 import com.dumpcs.filter.ui.screens.FileViewerScreen
 import com.dumpcs.filter.ui.screens.HistoryScreen
 import com.dumpcs.filter.ui.screens.HomeScreen
-import com.dumpcs.filter.ui.screens.LoginScreen
 import com.dumpcs.filter.ui.screens.MainTabsScreen
 import com.dumpcs.filter.ui.screens.ResultsScreen
 import com.dumpcs.filter.ui.screens.ScriptScreen
@@ -53,13 +52,13 @@ import com.dumpcs.filter.ui.screens.SettingsScreen
 import androidx.compose.foundation.layout.Box
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.dumpcs.filter.music.MusicPlayer
 import com.dumpcs.filter.ui.components.MusicNowPlayingOverlay
 import com.dumpcs.filter.ui.screens.SplashScreen
 import com.dumpcs.filter.ui.theme.DumpCSFilterTheme
 import com.dumpcs.filter.ui.viewmodel.DumpViewModel
+import com.dumpcs.filter.ui.viewmodel.ExplorerViewModel
 import com.dumpcs.filter.ui.viewmodel.MainViewModel
 import com.dumpcs.filter.ui.viewmodel.ScriptViewModel
 class MainActivity : ComponentActivity() {
@@ -67,6 +66,7 @@ class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
     private val dumpViewModel: DumpViewModel by viewModels()
     private val scriptViewModel: ScriptViewModel by viewModels()
+    private val explorerViewModel: ExplorerViewModel by viewModels()
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -83,24 +83,12 @@ class MainActivity : ComponentActivity() {
 
         val appPrefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
 
-        // 背景音乐：仅「已绑定卡密」的用户冷启动才自动播放（未登录不扫描、不播放）
-        if (appPrefs.getBoolean("card_bound", false)) {
-            startBackgroundMusic()
-        }
+        // 背景音乐：冷启动按用户设置自动随机播放
+        startBackgroundMusic()
 
         setContent {
             DumpCSFilterTheme {
                 Box(modifier = Modifier.fillMaxSize()) {
-                    // 卡密绑定：已绑定直接进主界面，未绑定先过卡密 + 图形人机验证
-                    var cardBound by rememberSaveable { androidx.compose.runtime.mutableStateOf(appPrefs.getBoolean("card_bound", false)) }
-                    if (!cardBound) {
-                        LoginScreen(onSuccess = {
-                            appPrefs.edit().putBoolean("card_bound", true).apply()
-                            cardBound = true
-                            // 登录成功后才激活背景音乐（延迟3秒，等登录音频播完）
-                            startBackgroundMusic(3000)
-                        })
-                    } else {
                     Surface(
                         modifier = Modifier.fillMaxSize(),
                         color = MaterialTheme.colorScheme.background
@@ -148,7 +136,8 @@ class MainActivity : ComponentActivity() {
                                     navController = navController,
                                     viewModel = viewModel,
                                     dumpViewModel = dumpViewModel,
-                                    scriptViewModel = scriptViewModel
+                                    scriptViewModel = scriptViewModel,
+                                    explorerViewModel = explorerViewModel
                                 )
                             }
                             composable(Screen.Results.route) {
@@ -168,37 +157,22 @@ class MainActivity : ComponentActivity() {
                                 SettingsScreen(navController = navController, viewModel = viewModel)
                             }
                         }
-                        }
-                    }
                     }
                     MusicNowPlayingOverlay()
-                    }
                 }
             }
         }
 
-    /** 背景音乐：延迟 delayMs 后扫描+随机播放（登录成功时延迟3秒等登录音频播完） */
-    private fun startBackgroundMusic(delayMs: Long = 0L) {
+    /** 背景音乐：按用户设置扫描并随机播放 */
+    private fun startBackgroundMusic() {
         val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
         if (!prefs.getBoolean("music_enabled", true)) return
         lifecycleScope.launch(Dispatchers.IO) {
-            if (delayMs > 0) delay(delayMs)
             if (!MusicPlayer.loaded) {
                 MusicPlayer.loadTracks(this@MainActivity)
                 if (MusicPlayer.tracks.isNotEmpty()) MusicPlayer.playRandom(this@MainActivity)
             }
         }
-    }
-
-    /** 退出登录：清除卡密绑定 + 停止音乐 + 重启回到登录页 */
-    fun logout() {
-        getSharedPreferences("app_prefs", MODE_PRIVATE)
-            .edit().putBoolean("card_bound", false).apply()
-        MusicPlayer.stop()
-        val intent = Intent(this, MainActivity::class.java)
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-        startActivity(intent)
-        finish()
     }
 
     private fun checkAndRequestPermissions() {

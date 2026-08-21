@@ -1,8 +1,6 @@
 package com.dumpcs.filter.ui.screens
 
-import android.app.Activity
 import android.content.Context
-import com.dumpcs.filter.MainActivity
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -376,47 +374,6 @@ fun SettingsScreen(navController: NavController, viewModel: MainViewModel) {
                             Icon(Icons.Default.Add, null)
                             Spacer(Modifier.width(8.dp))
                             Text(if (importing) "导入中…" else "导入歌曲")
-                        }
-                    }
-                }
-            }
-
-            item {
-                SectionTitle("账号")
-            }
-            item {
-                Card(modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
-                    Column(modifier = Modifier.padding(20.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Lock,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column {
-                                Text("已绑定卡密（WUHAI-8888）", fontWeight = FontWeight.Medium)
-                                Text(
-                                    "登录后自动播放背景音乐，退出后回到卡密页",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(14.dp))
-                        OutlinedButton(
-                            onClick = {
-                                val act = musicContext as? MainActivity
-                                act?.logout()
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = MaterialTheme.colorScheme.error
-                            )
-                        ) {
-                            Text("退出登录")
                         }
                     }
                 }

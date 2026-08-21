@@ -22,3 +22,5 @@ Thumbs.db
 
 # 本地配置
 local.properties
+# 独立 git 仓
+il2cpp-dumper-rs/

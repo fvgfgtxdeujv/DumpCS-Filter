@@ -22,6 +22,25 @@ import java.util.concurrent.TimeUnit
 /** Dump 流程状态 */
 enum class DumpState { IDLE, DUMPING, DONE, ERROR }
 
+/**
+ * 引擎通过 DumpSink::request_input 向 UI 请求输入时，用此密封类描述输入语义。
+ * 三种子类型对应 Rust 引擎的三处调用点：
+ *   - DumpAddress         → "Dump base address (hex), or 0 to skip"
+ *   - ManualAddresses     → "CodeRegistration (hex)" / "MetadataRegistration (hex)"（两步）
+ *   - Architecture        → "Select target architecture (1..=N)"（Fat Mach-O）
+ */
+sealed class InputRequest {
+    data class DumpAddress(val prompt: String, val default: String? = null) : InputRequest()
+    data class ManualAddresses(
+        val step: Step, // CODE_REG → META_REG
+        val prompt: String,
+        val default: String? = null
+    ) : InputRequest() {
+        enum class Step { CODE_REG, META_REG }
+    }
+    data class Architecture(val prompt: String, val default: String? = null) : InputRequest()
+}
+
 class DumpViewModel(app: Application) : AndroidViewModel(app) {
 
     private val prefs = app.getSharedPreferences("dump_prefs", Context.MODE_PRIVATE)
@@ -50,8 +69,12 @@ class DumpViewModel(app: Application) : AndroidViewModel(app) {
     private val _saveDir = MutableStateFlow("")
     val saveDir: StateFlow<String> = _saveDir.asStateFlow()
 
-    private val _inputRequest = MutableStateFlow<String?>(null)
-    val inputRequest: StateFlow<String?> = _inputRequest.asStateFlow()
+    private val _inputRequest = MutableStateFlow<InputRequest?>(null)
+    val inputRequest: StateFlow<InputRequest?> = _inputRequest.asStateFlow()
+
+    /** ManualAddresses 两步流程中的中间变量：保存用户已输入的 CodeReg 值 */
+    private var _pendingCodeReg: String? = null
+    val pendingCodeReg: String? get() = _pendingCodeReg
 
     val config = DumperConfig()
 
@@ -182,7 +205,30 @@ class DumpViewModel(app: Application) : AndroidViewModel(app) {
                     }
 
                     override fun onRequestInput(request: String): String {
-                        _inputRequest.value = request
+                        when {
+                            request.contains("Dump base address") -> {
+                                _inputRequest.value = InputRequest.DumpAddress(request, "0")
+                            }
+                            request.contains("CodeRegistration") -> {
+                                _inputRequest.value = InputRequest.ManualAddresses(
+                                    InputRequest.ManualAddresses.Step.CODE_REG, request, null
+                                )
+                            }
+                            request.contains("MetadataRegistration") -> {
+                                val codeReg = _pendingCodeReg ?: ""
+                                _inputRequest.value = InputRequest.ManualAddresses(
+                                    InputRequest.ManualAddresses.Step.META_REG, request, null
+                                )
+                                // 等用户提交后，由 submitInput 回调将 codeReg 一并发送
+                                return codeReg // 先返回已保存的 CodeReg，MetaReg 等用户输入
+                            }
+                            request.contains("Select target architecture") -> {
+                                _inputRequest.value = InputRequest.Architecture(request, "1")
+                            }
+                            else -> {
+                                _inputRequest.value = InputRequest.DumpAddress(request, null)
+                            }
+                        }
                         val answer = inputQueue.poll(60, TimeUnit.SECONDS)
                         _inputRequest.value = null
                         return answer ?: ""
@@ -214,10 +260,17 @@ class DumpViewModel(app: Application) : AndroidViewModel(app) {
 
     /** 引擎请求输入时由 UI 提交 */
     fun submitInput(text: String) {
+        // 如果是 ManualAddresses 第一步（CodeReg），保存供第二步使用
+        val current = _inputRequest.value
+        if (current is InputRequest.ManualAddresses && current.step == InputRequest.ManualAddresses.Step.CODE_REG) {
+            _pendingCodeReg = text
+        }
         inputQueue.offer(text)
     }
 
     fun cancelInput() {
+        // 取消时清除两步流程的中间状态
+        _pendingCodeReg = null
         inputQueue.offer("")
     }
 }
