@@ -16,7 +16,7 @@
 │   ├── java/com/dumpcs/filter/   # 应用源码
 │   │   ├── data/                 # 数据层（parser/engine/ai/local/storage）
 │   │   ├── music/                # 背景音乐
-│   │   ├── service/              # 服务层
+│   │   ├── （已合并）              # 服务层
 │   │   ├── ui/                   # UI 层（screens/components/theme/navigation/viewmodel）
 │   │   └── update/               # 自动更新
 │   └── jniLibs/                  # 预编译引擎 .so
@@ -33,11 +33,11 @@
 | **应用名称** | `src/main/res/values/strings.xml` | `app_name` |
 | **应用图标** | `src/main/res/mipmap-*` | 替换各密度图标 |
 | **包名** | `build.gradle.kts` + `AndroidManifest.xml` | 修改 `applicationId` / `package` / `namespace` |
-| **主题色** | `src/main/java/.../ui/theme/` | 搜索颜色常量修改 |
-| **启动动画** | `src/main/java/.../ui/screens/SplashScreen.kt` | Canvas 绘制参数 |
-| **背景音乐开关默认值** | `src/main/java/.../ui/screens/SettingsScreen.kt` | `music_enabled` 默认 true → false |
-| **四页顺序/名称** | `src/main/java/.../ui/screens/MainTabsScreen.kt` | NavigationBar 四个 Tab 与 Pager 页 |
-| **输出目录** | `src/main/java/.../data/storage/` | 默认 `/sdcard/DumpCSFilter/` |
+| **主题色** | `src/main/java/.../ui/` | 搜索颜色常量修改 |
+| **启动动画** | `src/main/java/.../ui/SplashScreen.kt` | Canvas 绘制参数 |
+| **背景音乐开关默认值** | `src/main/java/.../ui/SettingsScreen.kt` | `music_enabled` 默认 true → false |
+| **四页顺序/名称** | `src/main/java/.../ui/MainTabsScreen.kt` | NavigationBar 四个 Tab 与 Pager 页 |
+| **输出目录** | `src/main/java/.../data/` | 默认 `/sdcard/DumpCSFilter/` |
 | **版本/更新地址** | `src/main/java/.../update/UpdateManager.kt` | `DEFAULT_CHECK_URL` 常量 |
 
 > 改包名后记得同步改 `AndroidManifest.xml` 的 `authorities`（FileProvider）里的 `${applicationId}`。
@@ -54,12 +54,12 @@
 
 以「新增一个页面」为例：
 
-1. **注册路由**：`src/main/java/.../ui/navigation/Screen.kt` 加一行
+1. **注册路由**：`src/main/java/.../ui/Screen.kt` 加一行
    ```kotlin
    data object MyPlugin : Screen("my_plugin")
    ```
 
-2. **写页面**：`src/main/java/.../ui/screens/MyPluginScreen.kt`
+2. **写页面**：`src/main/java/.../ui/MyPluginScreen.kt`
    ```kotlin
    @Composable
    fun MyPluginScreen(navController: NavHostController) { ... }
