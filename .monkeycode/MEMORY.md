@@ -77,3 +77,15 @@ This file records user instructions, preferences, and teachings for reference in
   - git credential.helper 配置为 /app/agent/bin/agent git-credential-helper，返回 500 错误
   - SSH 方式不可用（ssh 命令不存在）
   - 推送时需检查凭证助手状态，如失败可手动在 GitHub 设置 Personal Access Token 或改用其他方式推送
+
+[Project Knowledge Summary]
+- Date: 2026-08-21
+- Context: OLLVM 接入调研
+- Category: Operations & Deployment
+- Instructions:
+  - 已创建接入规划文档：docs/OLLVM_TODO.md
+  - 推荐方案：降级 NDK 至 r25c（Saint-Theana/ollvm-ndk-android），该版本所有 OLLVM pass 均正常
+  - r26d 中 -flat 和 -bcf pass 失效，不推荐
+  - 建议先采用策略 A（仅混淆引擎 so），验证效果后再考虑全量混淆
+  - 现代替代方案 Amice（fuqiuluo/amice）支持 LLVM 11-22，可通过 -fpass-plugin 与 NDK r26 配合使用
+  - 接入前需准备：下载 OLLVM NDK r25c、修改 local.properties、集成编译参数、更新 CI workflow
