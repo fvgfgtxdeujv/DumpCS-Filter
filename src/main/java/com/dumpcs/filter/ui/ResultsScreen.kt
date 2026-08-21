@@ -55,7 +55,7 @@ fun ResultsScreen(navController: NavController, viewModel: MainViewModel) {
                         IconButton(onClick = { navController.popBackStack() }) {
                             Icon(Icons.Default.Home, contentDescription = "重新搜索")
                         }
-                        IconButton(onClick = { navController.navigate(com.dumpcs.filter.ui.navigation.Screen.History.route) }) {
+                        IconButton(onClick = { navController.navigate(com.dumpcs.filter.ui.Screen.History.route) }) {
                             Icon(Icons.Default.History, contentDescription = "历史")
                         }
                     }
@@ -102,7 +102,7 @@ fun ResultsScreen(navController: NavController, viewModel: MainViewModel) {
                     modifier = Modifier.padding(padding),
                     onExplain = { cls ->
                         viewModel.prepareExplain(cls)
-                        navController.navigate(com.dumpcs.filter.ui.navigation.Screen.AiChat.route)
+                        navController.navigate(com.dumpcs.filter.ui.Screen.AiChat.route)
                     }
                 )
             }
@@ -112,7 +112,7 @@ fun ResultsScreen(navController: NavController, viewModel: MainViewModel) {
 
 @Composable
 fun ResultList(
-    result: com.dumpcs.filter.data.model.FilterResult,
+    result: com.dumpcs.filter.data.FilterResult,
     visibleCount: Int = 200,
     onLoadMore: () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -151,7 +151,7 @@ fun ResultList(
 }
 
 @Composable
-fun ResultSummaryCard(result: com.dumpcs.filter.data.model.FilterResult) {
+fun ResultSummaryCard(result: com.dumpcs.filter.data.FilterResult) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),

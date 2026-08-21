@@ -43,7 +43,6 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
         jniLibs {
-            // 跳过 strip（NDK 不可用时避免 stripDebugDebugSymbols 失败）
             keepDebugSymbols += "**/*.so"
         }
     }
