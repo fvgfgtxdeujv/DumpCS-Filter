@@ -86,6 +86,9 @@ fun DumpScreen(navController: NavController, dumpViewModel: DumpViewModel, mainV
                     }
                 },
                 actions = {
+                    IconButton(onClick = { dumpViewModel.toggleSettingsCollapsed() }) {
+                        Icon(Icons.Default.Settings, contentDescription = "设置")
+                    }
                     IconButton(onClick = { dumpViewModel.clearLogs() }) {
                         Icon(Icons.Default.Delete, contentDescription = "清空日志")
                     }
@@ -190,7 +193,7 @@ fun DumpScreen(navController: NavController, dumpViewModel: DumpViewModel, mainV
                         ) {
                             Text("③ Dump 设置（完全版）", fontWeight = FontWeight.Bold)
                             Icon(
-                                if (showSettings) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                if (showSettings) Icons.Default.ExpandMore else Icons.Default.ExpandLess,
                                 contentDescription = null
                             )
                         }

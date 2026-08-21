@@ -35,10 +35,10 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
- * 主界面四页容器：查找 / Dump / 脚本 / 浏览
+ * 主界面三页容器：查找 / Dump / 脚本
  * - HorizontalPager 左右滑动切换，跟手流畅
  * - 底部导航点击与滑动双向联动
- * - 浏览页 = DumpCsExplorer-Mobile 功能（树形浏览/搜索/收藏/Hook 模板）
+ * - 查找页内含查找+浏览两个子 tab
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -49,7 +49,7 @@ fun MainTabsScreen(
     scriptViewModel: ScriptViewModel,
     explorerViewModel: ExplorerViewModel
 ) {
-    val pagerState = rememberPagerState(initialPage = 0) { 4 }
+    val pagerState = rememberPagerState(initialPage = 0) { 3 }
     val scope = rememberCoroutineScope()
     var updateBarDismissed by remember { mutableStateOf(false) }
 
@@ -92,12 +92,6 @@ fun MainTabsScreen(
                     icon = { Icon(Icons.Outlined.Terminal, contentDescription = null) },
                     label = { Text("脚本") }
                 )
-                NavigationBarItem(
-                    selected = pagerState.currentPage == 3,
-                    onClick = { scope.launch { pagerState.animateScrollToPage(3) } },
-                    icon = { Icon(Icons.Default.AccountTree, contentDescription = null) },
-                    label = { Text("浏览") }
-                )
             }
         }
     ) { innerPadding ->
@@ -115,7 +109,6 @@ fun MainTabsScreen(
                     mainViewModel = viewModel
                 )
                 2 -> ScriptScreen(navController = navController, vm = scriptViewModel)
-                else -> ExplorerScreen(vm = explorerViewModel)
             }
         }
     }
