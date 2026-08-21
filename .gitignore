@@ -31,3 +31,8 @@ java_pid*.hprof
 # Build intermediates
 app/.cxx/
 app/.kotlin/
+# Build 产物
+app/build/
+app/.cxx/
+app/.kotlin/
+*.hprof
