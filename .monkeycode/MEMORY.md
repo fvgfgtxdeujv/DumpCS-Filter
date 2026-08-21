@@ -81,3 +81,15 @@ This file records user instructions, preferences, and teachings for reference in
   - 已将 InputRequest 结构化类型合并到 DumpViewModel（sealed class + 三步分发逻辑 + pendingCodeReg 两步状态）
   - NDK r26c 安装于 /tmp/opencode/android-ndk-r26c，cargo-ndk v2.0.0 可用
   - release .so 交叉编译输出：app/src/main/jniLibs/arm64-v8a/（6.2MB）+ armeabi-v7a/（5.3MB）
+
+[Project Knowledge Summary]
+- Date: 2026-08-21
+- Context: 配置 GitHub Actions CI/CD 构建流程
+- Category: Operations & Deployment
+- Instructions:
+  - workflow 位于 app/.github/workflows/build.yml
+  - 手动触发（workflow_dispatch）时可选择 debug 或 release
+  - debug 构建无需 tag，自动上传 artifact
+  - release 构建可选择填写 tag，填写后自动创建 GitHub Release 并上传 APK
+  - 构建命令：./gradlew :app:assembleDebug 或 :app:assembleRelease
+  - Gradle Wrapper 已随仓分发（gradlew + gradle/wrapper/），无需额外安装 Gradle
