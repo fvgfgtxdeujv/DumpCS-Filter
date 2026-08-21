@@ -57,3 +57,23 @@ This file records user instructions, preferences, and teachings for reference in
   - Gradle Wrapper 已随仓分发，使用 ./gradlew 执行构建
   - local.properties 需配置 sdk.dir 和 ndk.dir
   - SDK 组件：platforms;android-34, build-tools;34.0.0, platform-tools, ndk;26.1.10909125
+
+[Project Knowledge Summary]
+- Date: 2026-08-21
+- Context: data/ 与 ui/ 子包结构扁平化重构
+- Category: Workflow & Collaboration
+- Instructions:
+  - data/ 目录下的 ai/dump/engine/explorer/local/model/parser/script/storage 已合并到 data/ 根目录，package 统一为 com.dumpcs.filter.data
+  - ui/ 目录下的 components/navigation/screens/theme/viewmodel 已合并到 ui/ 根目录，package 统一为 com.dumpcs.filter.ui
+  - service/ 目录为空，已删除
+  - 文件移动后需同步更新所有 import 语句和文档路径引用
+  - 批量更新 sed 命令参考：data 子包 import 替换为 com.dumpcs.filter.data.，ui 子包同理
+
+[Project Knowledge Summary]
+- Date: 2026-08-21
+- Context: GitHub 推送凭证问题
+- Category: Troubleshooting & Debugging
+- Instructions:
+  - git credential.helper 配置为 /app/agent/bin/agent git-credential-helper，返回 500 错误
+  - SSH 方式不可用（ssh 命令不存在）
+  - 推送时需检查凭证助手状态，如失败可手动在 GitHub 设置 Personal Access Token 或改用其他方式推送
