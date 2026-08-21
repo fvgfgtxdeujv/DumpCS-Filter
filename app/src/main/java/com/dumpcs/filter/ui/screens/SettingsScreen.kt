@@ -31,6 +31,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.dumpcs.filter.music.MusicPlayer
 import com.dumpcs.filter.ui.viewmodel.MainViewModel
+import com.dumpcs.filter.update.UpdateStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -399,6 +400,17 @@ fun SettingsScreen(navController: NavController, viewModel: MainViewModel) {
                             Column {
                                 Text("DumpCS Filter", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
                                 Text("版本 1.1.0", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row {
+                                    OutlinedButton(
+                                        onClick = { viewModel.updateManager.checkUpdate(forceCheck = true) },
+                                        enabled = viewModel.updateManager.status == UpdateStatus.IDLE || viewModel.updateManager.status == UpdateStatus.UP_TO_DATE
+                                    ) {
+                                        Icon(Icons.Default.Refresh, null, modifier = Modifier.size(14.dp))
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("检查更新", style = MaterialTheme.typography.bodySmall)
+                                    }
+                                }
                             }
                         }
                         Spacer(modifier = Modifier.height(12.dp))

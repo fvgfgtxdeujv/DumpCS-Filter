@@ -18,6 +18,7 @@ import com.dumpcs.filter.data.parser.DumpCSParser
 import com.dumpcs.filter.data.storage.AiSettingsManager
 import com.dumpcs.filter.data.storage.PrefsManager
 import com.dumpcs.filter.data.storage.StorageManager
+import com.dumpcs.filter.update.UpdateManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -37,6 +38,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val explainer = AiExplainer()
     private val storage = StorageManager(application)
     private val prefs = PrefsManager(application)
+    val updateManager = UpdateManager(application).also { it.setCurrentVersion(BuildConfig.VERSION_CODE, BuildConfig.VERSION_NAME) }
     private val aiSettings = AiSettingsManager(application)
     private val llmClient = LlmClient()
     private val historyDao = AppDatabase.getDatabase(application).historyDao()

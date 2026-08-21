@@ -16,13 +16,21 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
+import com.dumpcs.filter.ui.components.UpdateBar
 import com.dumpcs.filter.ui.viewmodel.DumpViewModel
 import com.dumpcs.filter.ui.viewmodel.ExplorerViewModel
 import com.dumpcs.filter.ui.viewmodel.MainViewModel
 import com.dumpcs.filter.ui.viewmodel.ScriptViewModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
@@ -42,8 +50,27 @@ fun MainTabsScreen(
 ) {
     val pagerState = rememberPagerState(initialPage = 0) { 4 }
     val scope = rememberCoroutineScope()
+    var updateBarDismissed by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        while (isActive) {
+            delay(30_000)
+            if (!updateBarDismissed) {
+                viewModel.updateManager.queryDownloadProgress()
+            }
+        }
+    }
 
     Scaffold(
+        topBar = {
+            if (!updateBarDismissed) {
+                UpdateBar(
+                    updateManager = viewModel.updateManager,
+                    modifier = Modifier.padding(top = 4.dp),
+                    onDismiss = { updateBarDismissed = true }
+                )
+            }
+        },
         bottomBar = {
             NavigationBar {
                 NavigationBarItem(

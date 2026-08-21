@@ -85,6 +85,8 @@ class MainActivity : ComponentActivity() {
 
         // 背景音乐：冷启动按用户设置自动随机播放
         startBackgroundMusic()
+        // 启动时异步检查更新（6小时冷却期后才会发起网络请求）
+        lifecycleScope.launch { viewModel.updateManager.checkUpdate(forceCheck = false) }
 
         setContent {
             DumpCSFilterTheme {
