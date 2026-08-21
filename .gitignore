@@ -36,3 +36,4 @@ app/build/
 app/.cxx/
 app/.kotlin/
 *.hprof
+release.keystore
