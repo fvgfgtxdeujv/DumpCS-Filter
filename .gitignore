@@ -24,3 +24,10 @@ Thumbs.db
 local.properties
 # 独立 git 仓
 il2cpp-dumper-rs/
+
+# Heap dump files
+java_pid*.hprof
+
+# Build intermediates
+app/.cxx/
+app/.kotlin/

@@ -403,7 +403,7 @@ fun SettingsScreen(navController: NavController, viewModel: MainViewModel) {
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Row {
                                     OutlinedButton(
-                                        onClick = { viewModel.updateManager.checkUpdate(forceCheck = true) },
+                                        onClick = { viewModel.checkUpdateNow() },
                                         enabled = viewModel.updateManager.status == UpdateStatus.IDLE || viewModel.updateManager.status == UpdateStatus.UP_TO_DATE
                                     ) {
                                         Icon(Icons.Default.Refresh, null, modifier = Modifier.size(14.dp))

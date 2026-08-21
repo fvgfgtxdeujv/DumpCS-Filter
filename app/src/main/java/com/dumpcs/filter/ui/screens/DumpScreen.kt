@@ -408,10 +408,11 @@ fun DumpScreen(navController: NavController, dumpViewModel: DumpViewModel, mainV
         AlertDialog(
             onDismissRequest = { dumpViewModel.cancelInput() },
             title = {
-                when (inputRequest) {
+                val ir = inputRequest
+                when (ir) {
                     is InputRequest.DumpAddress -> Text("引擎请求输入：Dump 基址")
                     is InputRequest.ManualAddresses ->
-                        Text(if (inputRequest.step == InputRequest.ManualAddresses.Step.CODE_REG) "输入 CodeRegistration" else "输入 MetadataRegistration")
+                        Text(if (ir.step == InputRequest.ManualAddresses.Step.CODE_REG) "输入 CodeRegistration" else "输入 MetadataRegistration")
                     is InputRequest.Architecture -> Text("引擎请求输入：架构选择")
                     else -> Text("引擎请求输入")
                 }

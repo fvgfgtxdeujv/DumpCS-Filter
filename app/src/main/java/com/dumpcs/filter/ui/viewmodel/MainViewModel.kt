@@ -38,7 +38,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val explainer = AiExplainer()
     private val storage = StorageManager(application)
     private val prefs = PrefsManager(application)
-    val updateManager = UpdateManager(application).also { it.setCurrentVersion(BuildConfig.VERSION_CODE, BuildConfig.VERSION_NAME) }
+    val updateManager = UpdateManager(application).also { it.setCurrentVersion(2, "1.1.1") }
     private val aiSettings = AiSettingsManager(application)
     private val llmClient = LlmClient()
     private val historyDao = AppDatabase.getDatabase(application).historyDao()
@@ -548,6 +548,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /** 清空 AI 解释聊天历史 */
+    /** 立即检查更新（绕过冷却期） */
+    fun checkUpdateNow() {
+        viewModelScope.launch { updateManager.checkUpdate(forceCheck = true) }
+    }
+
     fun clearAiChats() {
         viewModelScope.launch {
             aiChatDao.deleteAll()

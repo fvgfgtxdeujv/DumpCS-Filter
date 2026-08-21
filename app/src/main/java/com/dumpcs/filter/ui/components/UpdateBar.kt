@@ -12,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.dumpcs.filter.update.UpdateManager
@@ -206,7 +207,7 @@ private fun CollapsibleChangelog(changelog: String) {
             Icon(
                 imageVector = if (expanded) Icons.Default.Refresh else Icons.Default.Refresh,
                 contentDescription = null,
-                modifier = Modifier.rotate(if (expanded) 180f else 0f)
+                modifier = Modifier
             )
         }
         if (expanded) {

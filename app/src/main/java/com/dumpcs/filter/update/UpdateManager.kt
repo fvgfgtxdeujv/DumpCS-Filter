@@ -10,36 +10,33 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.File
-import java.io.InputStream
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
 
-/** 版本信息 */
 data class UpdateInfo(
     val versionCode: Int,
     val versionName: String,
     val downloadUrl: String,
     val changelog: String = "",
-    val forceUpdate: Boolean = false
+    val forceUpdate: Boolean = false,
+    val currentVersionCode: Int = 0
 ) {
-    val isUpdateAvailable: Boolean get() = versionCode > getCurrentVersionCode()
+    val isUpdateAvailable: Boolean get() = versionCode > currentVersionCode
 }
 
-/** 更新状态 */
 enum class UpdateStatus { IDLE, CHECKING, UP_TO_DATE, UPDATE_AVAILABLE, DOWNLOADING, DOWNLOAD_COMPLETE, DOWNLOAD_FAILED, INSTALLATION_READY }
 
-class UpdateManager(private val context: Context) {
+class UpdateManager(private val ctx: Context) {
     companion object {
         private const val PREFS_NAME = "update_prefs"
         private const val KEY_LAST_CHECK_TIME = "last_check_time"
         private const val KEY_DOWNLOAD_ID = "download_id"
-        private const val MIN_CHECK_INTERVAL_MS = 6 * 3600 * 1000L
-        private const val DEFAULT_CHECK_URL = "https://raw.githubusercontent.com/fvgfgtxdeujv/DumpCS-Filter/main/update.json"
+        private const val MIN_CHECK_INTERVAL_MS = 6L * 3600 * 1000
+        const val DEFAULT_CHECK_URL = "https://raw.githubusercontent.com/fvgfgtxdeujv/DumpCS-Filter/main/update.json"
     }
 
-    private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-    private val downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+    private val prefs = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     private var currentDownloadId: Long? = null
     private var _status = UpdateStatus.IDLE
     val status: UpdateStatus get() = _status
@@ -53,13 +50,8 @@ class UpdateManager(private val context: Context) {
     private var savedApkPath: String? = null
 
     fun setCurrentVersion(versionCode: Int, versionName: String) {
-        prefs.edit()
-            .putInt("current_version_code", versionCode)
-            .putString("current_version_name", versionName)
-            .apply()
+        prefs.edit().putInt("current_version_code", versionCode).putString("current_version_name", versionName).apply()
     }
-
-    private fun getCurrentVersionCode(): Int = prefs.getInt("current_version_code", 0)
 
     suspend fun checkUpdate(forceCheck: Boolean = false): UpdateInfo? = withContext(Dispatchers.IO) {
         if (!forceCheck) {
@@ -77,8 +69,7 @@ class UpdateManager(private val context: Context) {
             conn.requestMethod = "GET"
             conn.connectTimeout = 8000
             conn.readTimeout = 8000
-            val code = conn.responseCode
-            if (code != HttpURLConnection.HTTP_OK) {
+            if (conn.responseCode != HttpURLConnection.HTTP_OK) {
                 _status = UpdateStatus.IDLE
                 return@withContext null
             }
@@ -95,7 +86,8 @@ class UpdateManager(private val context: Context) {
                 versionName = json.getString("versionName"),
                 downloadUrl = json.getString("downloadUrl"),
                 changelog = json.optString("changelog", ""),
-                forceUpdate = json.optBoolean("forceUpdate", false)
+                forceUpdate = json.optBoolean("forceUpdate", false),
+                currentVersionCode = prefs.getInt("current_version_code", 0)
             )
             _updateInfo = info
             _status = if (info.isUpdateAvailable) UpdateStatus.UPDATE_AVAILABLE else UpdateStatus.UP_TO_DATE
@@ -109,7 +101,7 @@ class UpdateManager(private val context: Context) {
     fun startDownload(): Boolean {
         val info = _updateInfo ?: return false
         _status = UpdateStatus.DOWNLOADING
-        val dm = ContextCompat.getSystemService(context, DownloadManager::class.java) ?: return false
+        val dm = ContextCompat.getSystemService(ctx, DownloadManager::class.java) ?: return false
         val request = DownloadManager.Request(Uri.parse(info.downloadUrl))
             .setTitle("DumpCS Filter 更新")
             .setDescription("正在下载最新版本 ${info.versionName}")
@@ -126,12 +118,12 @@ class UpdateManager(private val context: Context) {
     fun queryDownloadProgress(): Float? {
         val downloadId = prefs.getLong(KEY_DOWNLOAD_ID, -1L)
         if (downloadId < 0) return null
-        val dm = ContextCompat.getSystemService(context, DownloadManager::class.java) ?: return null
+        val dm = ContextCompat.getSystemService(ctx, DownloadManager::class.java) ?: return null
         val query = DownloadManager.Query().setFilterById(downloadId)
         val cursor = dm.query(query) ?: return null
         if (!cursor.moveToFirst()) { cursor.close(); return null }
         val statusCol = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
-        val progressCol = cursor.getColumnIndex(DownloadManager.COLUMN_PROGRESS)
+        val downloadedCol = cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
         val totalCol = cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)
         val reasonCol = cursor.getColumnIndex(DownloadManager.COLUMN_REASON)
         val status = cursor.getInt(statusCol)
@@ -140,7 +132,7 @@ class UpdateManager(private val context: Context) {
                 val uri = dm.getUriForDownloadedFile(downloadId)
                 if (uri != null) {
                     val srcFile = File(uri.path ?: "")
-                    val destFile = File(context.cacheDir, "latest_update.apk")
+                    val destFile = File(ctx.cacheDir, "latest_update.apk")
                     srcFile.copyTo(destFile, overwrite = true)
                     savedApkPath = destFile.absolutePath
                 }
@@ -157,10 +149,10 @@ class UpdateManager(private val context: Context) {
             }
             DownloadManager.STATUS_RUNNING, DownloadManager.STATUS_PENDING -> {
                 val total = cursor.getLong(totalCol)
-                val progress = cursor.getLong(progressCol)
+                val downloaded = if (downloadedCol >= 0) cursor.getLong(downloadedCol) else 0L
                 cursor.close()
                 if (total <= 0) return null
-                _downloadProgress = progress.toFloat() / total
+                _downloadProgress = downloaded.toFloat() / total
                 return _downloadProgress
             }
         }
@@ -173,33 +165,25 @@ class UpdateManager(private val context: Context) {
         val file = File(apkPath)
         if (!file.exists()) return
         val fileUri = androidx.core.content.FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.provider",
-            file
+            ctx, "${ctx.packageName}.provider", file
         )
         val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
             setDataAndType(fileUri, "application/vnd.android.package-archive")
             addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
             addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
         }
-        context.startActivity(intent)
+        ctx.startActivity(intent)
         _status = UpdateStatus.INSTALLATION_READY
     }
 
     fun cancelDownload() {
         val downloadId = prefs.getLong(KEY_DOWNLOAD_ID, -1L)
         if (downloadId > 0) {
-            ContextCompat.getSystemService(context, DownloadManager::class.java)?.remove(downloadId)
+            ContextCompat.getSystemService(ctx, DownloadManager::class.java)?.remove(downloadId)
         }
         prefs.edit().remove(KEY_DOWNLOAD_ID).apply()
         savedApkPath = null
         _status = UpdateStatus.IDLE
         _downloadProgress = 0f
-    }
-
-    fun resetDismiss() {
-        if (_status == UpdateStatus.UPDATE_AVAILABLE || _status == UpdateStatus.DOWNLOAD_COMPLETE) {
-            // 保持状态，不重置
-        }
     }
 }
