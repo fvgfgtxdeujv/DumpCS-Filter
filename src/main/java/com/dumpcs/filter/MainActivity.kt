@@ -45,7 +45,6 @@ import com.dumpcs.filter.ui.DumpScreen
 import com.dumpcs.filter.ui.FileViewerScreen
 import com.dumpcs.filter.ui.HistoryScreen
 import com.dumpcs.filter.ui.HomeScreen
-import com.dumpcs.filter.ui.LoginScreen
 import com.dumpcs.filter.ui.MainTabsScreen
 import com.dumpcs.filter.ui.ResultsScreen
 import com.dumpcs.filter.ui.ScriptScreen
@@ -85,25 +84,12 @@ class MainActivity : ComponentActivity() {
 
         val appPrefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
 
-        // 背景音乐：仅「已绑定卡密」的用户冷启动才自动播放（未登录不扫描、不播放）
-        if (appPrefs.getBoolean("card_bound", false)) {
-            startBackgroundMusic()
+        startBackgroundMusic()
         lifecycleScope.launch { viewModel.updateManager.checkUpdate(forceCheck = false) }
-        }
 
         setContent {
             DumpCSFilterTheme {
                 Box(modifier = Modifier.fillMaxSize()) {
-                    // 卡密绑定：已绑定直接进主界面，未绑定先过卡密 + 图形人机验证
-                    var cardBound by rememberSaveable { androidx.compose.runtime.mutableStateOf(appPrefs.getBoolean("card_bound", false)) }
-                    if (!cardBound) {
-                        LoginScreen(onSuccess = {
-                            appPrefs.edit().putBoolean("card_bound", true).apply()
-                            cardBound = true
-                            // 登录成功后才激活背景音乐（延迟3秒，等登录音频播完）
-                            startBackgroundMusic(3000)
-                        })
-                    } else {
                     Surface(
                         modifier = Modifier.fillMaxSize(),
                         color = MaterialTheme.colorScheme.background
@@ -174,14 +160,13 @@ class MainActivity : ComponentActivity() {
                         }
                         }
                     }
-                    }
                     MusicNowPlayingOverlay()
                     }
                 }
             }
         }
 
-    /** 背景音乐：延迟 delayMs 后扫描+随机播放（登录成功时延迟3秒等登录音频播完） */
+    /** 背景音乐：启动后扫描+随机播放 */
     private fun startBackgroundMusic(delayMs: Long = 0L) {
         val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
         if (!prefs.getBoolean("music_enabled", true)) return
@@ -194,16 +179,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** 退出登录：清除卡密绑定 + 停止音乐 + 重启回到登录页 */
-    fun logout() {
-        getSharedPreferences("app_prefs", MODE_PRIVATE)
-            .edit().putBoolean("card_bound", false).apply()
-        MusicPlayer.stop()
-        val intent = Intent(this, MainActivity::class.java)
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-        startActivity(intent)
-        finish()
-    }
 
     private fun checkAndRequestPermissions() {
         // Android 11+ 需要"所有文件访问"特殊权限才能读写公共存储

@@ -39,6 +39,11 @@ jobs:
 
       - name: Build ${{ github.event.inputs.build_type }} APK
         run: ./gradlew assemble${{ github.event.inputs.build_type == 'release' && 'Release' || 'Debug' }} --no-daemon
+        env:
+          KEYSTORE_PATH: ${{ secrets.KEYSTORE_PATH }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
