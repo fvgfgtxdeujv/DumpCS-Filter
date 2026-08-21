@@ -93,3 +93,12 @@ This file records user instructions, preferences, and teachings for reference in
   - release 构建可选择填写 tag，填写后自动创建 GitHub Release 并上传 APK
   - 构建命令：./gradlew :app:assembleDebug 或 :app:assembleRelease
   - Gradle Wrapper 已随仓分发（gradlew + gradle/wrapper/），无需额外安装 Gradle
+
+[Project Knowledge Summary]
+- Date: 2026-08-21
+- Context: 引擎仓 il2cpp-dumper-rs 已删除，仅保留 app 项目
+- Category: Operations & Deployment
+- Instructions:
+  - 引擎源码已从仓库删除，/workspace/il2cpp-dumper-rs 不再存在
+  - app/build.gradle.kts 中无 rust.engine 相关配置，jniLibs 使用预编译 .so
+  - 如需重新引入引擎，需从 GitHub 仓库 https://github.com/fvgfgtxdeujv/il2cpp-dumper-rs 获取
