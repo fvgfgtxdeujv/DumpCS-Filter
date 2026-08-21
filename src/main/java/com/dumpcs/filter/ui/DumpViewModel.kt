@@ -24,21 +24,21 @@ enum class DumpState { IDLE, DUMPING, DONE, ERROR }
 
 /**
  * 引擎通过 DumpSink::request_input 向 UI 请求输入时，用此密封类描述输入语义。
- * 三种子类型对应 Rust 引擎的三处调用点：
- *   - DumpAddress         → "Dump base address (hex), or 0 to skip"
- *   - ManualAddresses     → "CodeRegistration (hex)" / "MetadataRegistration (hex)"（两步）
- *   - Architecture        → "Select target architecture (1..=N)"（Fat Mach-O）
+ * 新版引擎只发两个标记请求：
+ *   - "dump_address"      → 请求 Dump 基址（dump 文件模式），单输入框，默认 "0"
+ *   - "manual_addresses"  → 请求 CodeRegistration + MetadataRegistration，双输入框，提交 "codeReg,metaReg"
+ * 旧引擎的描述性文本请求（Dump base address / CodeRegistration (hex) / Select target architecture）
+ * 保留兼容分支处理。
  */
 sealed class InputRequest {
-    data class DumpAddress(val prompt: String, val default: String? = null) : InputRequest()
+    abstract val prompt: String
+    data class DumpAddress(override val prompt: String, val default: String? = null) : InputRequest()
     data class ManualAddresses(
-        val step: Step, // CODE_REG → META_REG
-        val prompt: String,
-        val default: String? = null
-    ) : InputRequest() {
-        enum class Step { CODE_REG, META_REG }
-    }
-    data class Architecture(val prompt: String, val default: String? = null) : InputRequest()
+        override val prompt: String,
+        val defaultCodeReg: String? = null,
+        val defaultMetaReg: String? = null
+    ) : InputRequest()
+    data class Architecture(override val prompt: String, val default: String? = null) : InputRequest()
 }
 
 class DumpViewModel(app: Application) : AndroidViewModel(app) {
@@ -81,10 +81,6 @@ class DumpViewModel(app: Application) : AndroidViewModel(app) {
     )
     val hasCachedReg: StateFlow<Boolean> = _hasCachedReg
 
-    /** ManualAddresses 两步流程中的中间变量：保存用户已输入的 CodeReg 值 */
-    private var _pendingCodeReg: String? = null
-    val pendingCodeReg: String? get() = _pendingCodeReg
-
     val config = DumperConfig()
 
     private val logBuffer = mutableListOf<String>()
@@ -115,15 +111,11 @@ class DumpViewModel(app: Application) : AndroidViewModel(app) {
     /** 清空并重新填充 inputQueue，用于每次 dump 开始时重置 */
     private fun resetInputQueue() {
         inputQueue.clear()
-        // 优先使用手动输入的 pendingCodeReg（本次会话），否则用持久化的 savedCodeReg
+        // 两个注册地址都有缓存时：合成 "codeReg,metaReg" 自动注入（manual_addresses 请求直接命中，全自动）
         val savedCodeReg = prefs.getString("code_reg", null)
         val savedMetaReg = prefs.getString("meta_reg", null)
-        if (savedCodeReg != null) {
-            _pendingCodeReg = savedCodeReg
-            inputQueue.offer(savedCodeReg)
-        }
-        if (savedMetaReg != null) {
-            inputQueue.offer(savedMetaReg)
+        if (!savedCodeReg.isNullOrBlank() && !savedMetaReg.isNullOrBlank()) {
+            inputQueue.offer("$savedCodeReg,$savedMetaReg")
         }
     }
 
@@ -237,7 +229,6 @@ class DumpViewModel(app: Application) : AndroidViewModel(app) {
     /** 清除已保存的 CodeRegistration / MetadataRegistration（换游戏时使用） */
     fun clearRegistrationCache() {
         prefs.edit().remove("code_reg").remove("meta_reg").apply()
-        _pendingCodeReg = null
         inputQueue.clear()
         _hasCachedReg.value = false
         addLog("已清除已保存的注册地址")
@@ -267,31 +258,37 @@ class DumpViewModel(app: Application) : AndroidViewModel(app) {
                     }
 
                     override fun onRequestInput(request: String): String {
-                        when {
-                            request.contains("Dump base address") -> {
+                        val answer = when {
+                            // 新版引擎：请求 dump 基址
+                            request == "dump_address" || request.contains("Dump base address") -> {
                                 _inputRequest.value = InputRequest.DumpAddress(request, "0")
+                                inputQueue.poll(60, TimeUnit.SECONDS)
                             }
-                            request.contains("CodeRegistration") -> {
+                            // 新版引擎：请求 CodeRegistration + MetadataRegistration（一次，双输入）
+                            request == "manual_addresses" ||
+                                (request.contains("CodeRegistration") && request.contains("MetadataRegistration")) -> {
                                 _inputRequest.value = InputRequest.ManualAddresses(
-                                    InputRequest.ManualAddresses.Step.CODE_REG, request, null
+                                    request,
+                                    defaultCodeReg = prefs.getString("code_reg", null),
+                                    defaultMetaReg = prefs.getString("meta_reg", null)
                                 )
+                                inputQueue.poll(60, TimeUnit.SECONDS)
                             }
-                            request.contains("MetadataRegistration") -> {
-                                val codeReg = _pendingCodeReg ?: ""
-                                _inputRequest.value = InputRequest.ManualAddresses(
-                                    InputRequest.ManualAddresses.Step.META_REG, request, null
-                                )
-                                // 等用户提交后，由 submitInput 回调将 codeReg 一并发送
-                                return codeReg // 先返回已保存的 CodeReg，MetaReg 等用户输入
-                            }
+                            // 旧引擎分步协议（防御性兼容）：有缓存直接返回，无缓存返回空由引擎报错
+                            request.contains("CodeRegistration") ->
+                                prefs.getString("code_reg", null) ?: ""
+                            request.contains("MetadataRegistration") ->
+                                prefs.getString("meta_reg", null) ?: ""
+                            // 旧引擎：Fat Mach-O 架构选择
                             request.contains("Select target architecture") -> {
                                 _inputRequest.value = InputRequest.Architecture(request, "1")
+                                inputQueue.poll(60, TimeUnit.SECONDS)
                             }
                             else -> {
                                 _inputRequest.value = InputRequest.DumpAddress(request, null)
+                                inputQueue.poll(60, TimeUnit.SECONDS)
                             }
                         }
-                        val answer = inputQueue.poll(60, TimeUnit.SECONDS)
                         _inputRequest.value = null
                         return answer ?: ""
                     }
@@ -324,23 +321,18 @@ class DumpViewModel(app: Application) : AndroidViewModel(app) {
     fun submitInput(text: String) {
         val current = _inputRequest.value
         if (current is InputRequest.ManualAddresses) {
-            when (current.step) {
-                InputRequest.ManualAddresses.Step.CODE_REG -> {
-                    _pendingCodeReg = text
-                    // 持久化，下次自动注入
-                    prefs.edit().putString("code_reg", text).apply()
-                }
-                InputRequest.ManualAddresses.Step.META_REG -> {
-                    // 持久化 MetadataRegistration
-                    prefs.edit().putString("meta_reg", text).apply()
-                }
-            }
+            // 新协议双输入框：text 为 "codeReg,metaReg"
+            val parts = text.split(",")
+            val codeReg = parts.getOrNull(0)?.trim().orEmpty()
+            val metaReg = parts.getOrNull(1)?.trim().orEmpty()
+            prefs.edit().putString("code_reg", codeReg).apply()
+            prefs.edit().putString("meta_reg", metaReg).apply()
+            _hasCachedReg.value = codeReg.isNotBlank() || metaReg.isNotBlank()
         }
         inputQueue.offer(text)
     }
 
     fun cancelInput() {
-        _pendingCodeReg = null
         inputQueue.offer("")
     }
 }

@@ -434,53 +434,72 @@ fun DumpScreen(navController: NavController, dumpViewModel: DumpViewModel, mainV
     }
 
     if (inputRequest != null) {
+        val ir = inputRequest!!
         var inputText by remember { mutableStateOf("") }
-        // ManualAddresses 第二步：展示已输入的 CodeReg 供确认
-        val manualStep = (inputRequest as? InputRequest.ManualAddresses)?.step
-        val pendingCodeReg = dumpViewModel.pendingCodeReg
+        var inputText2 by remember { mutableStateOf("") }
+        // 预填：ManualAddresses 双输入框预填缓存值；单输入框预填默认值
+        LaunchedEffect(ir) {
+            when (ir) {
+                is InputRequest.ManualAddresses -> {
+                    inputText = ir.defaultCodeReg ?: ""
+                    inputText2 = ir.defaultMetaReg ?: ""
+                }
+                is InputRequest.DumpAddress -> inputText = ir.default ?: ""
+                is InputRequest.Architecture -> inputText = ir.default ?: ""
+            }
+        }
         AlertDialog(
             onDismissRequest = { dumpViewModel.cancelInput() },
             title = {
-                val ir = inputRequest
                 when (ir) {
                     is InputRequest.DumpAddress -> Text("引擎请求输入：Dump 基址")
-                    is InputRequest.ManualAddresses ->
-                        Text(if (ir.step == InputRequest.ManualAddresses.Step.CODE_REG) "输入 CodeRegistration" else "输入 MetadataRegistration")
+                    is InputRequest.ManualAddresses -> Text("输入注册地址")
                     is InputRequest.Architecture -> Text("引擎请求输入：架构选择")
-                    else -> Text("引擎请求输入")
                 }
             },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(inputRequest?.let {
-                        when (it) {
-                            is InputRequest.DumpAddress -> it.prompt
-                            is InputRequest.ManualAddresses -> it.prompt
-                            is InputRequest.Architecture -> it.prompt
-                        }
-                    } ?: "", style = MaterialTheme.typography.bodySmall)
-                    if (manualStep == InputRequest.ManualAddresses.Step.META_REG && pendingCodeReg != null) {
-                        Text(
-                            "CodeRegistration: $pendingCodeReg（已填，请输入 MetadataRegistration）",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary
+                    Text(ir.prompt, style = MaterialTheme.typography.bodySmall)
+                    if (ir is InputRequest.ManualAddresses) {
+                        OutlinedTextField(
+                            value = inputText,
+                            onValueChange = { inputText = it },
+                            label = { Text("CodeRegistration (hex)") },
+                            placeholder = { Text("0x…") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = inputText2,
+                            onValueChange = { inputText2 = it },
+                            label = { Text("MetadataRegistration (hex)") },
+                            placeholder = { Text("0x…") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    } else {
+                        OutlinedTextField(
+                            value = inputText,
+                            onValueChange = { inputText = it },
+                            placeholder = {
+                                val default = (ir as? InputRequest.DumpAddress)?.default
+                                    ?: (ir as? InputRequest.Architecture)?.default
+                                Text(default ?: "输入内容…")
+                            },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
                         )
                     }
-                    OutlinedTextField(
-                        value = inputText,
-                        onValueChange = { inputText = it },
-                        placeholder = {
-                            val default = (inputRequest as? InputRequest.DumpAddress)?.default
-                                ?: (inputRequest as? InputRequest.Architecture)?.default
-                            Text(default ?: "输入内容…")
-                        },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
                 }
             },
             confirmButton = {
-                TextButton(onClick = { dumpViewModel.submitInput(inputText) }) { Text("提交") }
+                TextButton(onClick = {
+                    if (ir is InputRequest.ManualAddresses) {
+                        dumpViewModel.submitInput("${inputText.trim()},${inputText2.trim()}")
+                    } else {
+                        dumpViewModel.submitInput(inputText)
+                    }
+                }) { Text("提交") }
             },
             dismissButton = {
                 TextButton(onClick = { dumpViewModel.cancelInput() }) { Text("跳过") }
