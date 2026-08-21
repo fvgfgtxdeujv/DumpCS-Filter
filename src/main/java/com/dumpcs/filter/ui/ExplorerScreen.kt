@@ -588,7 +588,19 @@ fun ExplorerScreen(vm: ExplorerViewModel) {
         Column(Modifier.padding(pad).fillMaxSize().padding(12.dp)) {
 
             if (ui.isLoading) {
-                LinearProgressIndicator(Modifier.fillMaxWidth())
+                val pct = (vm.loadProgress.value * 100).toInt().coerceIn(0, 99)
+                Column(Modifier.fillMaxWidth()) {
+                    LinearProgressIndicator(
+                        progress = vm.loadProgress.value,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "解析中… $pct%",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 Spacer(Modifier.height(8.dp))
             }
             ui.error?.let {

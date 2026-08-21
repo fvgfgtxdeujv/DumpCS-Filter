@@ -72,6 +72,15 @@ class DumpViewModel(app: Application) : AndroidViewModel(app) {
     private val _inputRequest = MutableStateFlow<InputRequest?>(null)
     val inputRequest: StateFlow<InputRequest?> = _inputRequest.asStateFlow()
 
+    private val _settingsCollapsed = MutableStateFlow(prefs.getBoolean("settings_collapsed", true))
+    val settingsCollapsed: StateFlow<Boolean> = _settingsCollapsed
+
+    private val _hasCachedReg = MutableStateFlow(
+        !prefs.getString("code_reg", null).isNullOrBlank() ||
+        !prefs.getString("meta_reg", null).isNullOrBlank()
+    )
+    val hasCachedReg: StateFlow<Boolean> = _hasCachedReg
+
     /** ManualAddresses 两步流程中的中间变量：保存用户已输入的 CodeReg 值 */
     private var _pendingCodeReg: String? = null
     val pendingCodeReg: String? get() = _pendingCodeReg
@@ -100,6 +109,21 @@ class DumpViewModel(app: Application) : AndroidViewModel(app) {
                 delay(120)
                 flushLogs()
             }
+        }
+    }
+
+    /** 清空并重新填充 inputQueue，用于每次 dump 开始时重置 */
+    private fun resetInputQueue() {
+        inputQueue.clear()
+        // 优先使用手动输入的 pendingCodeReg（本次会话），否则用持久化的 savedCodeReg
+        val savedCodeReg = prefs.getString("code_reg", null)
+        val savedMetaReg = prefs.getString("meta_reg", null)
+        if (savedCodeReg != null) {
+            _pendingCodeReg = savedCodeReg
+            inputQueue.offer(savedCodeReg)
+        }
+        if (savedMetaReg != null) {
+            inputQueue.offer(savedMetaReg)
         }
     }
 
@@ -158,6 +182,8 @@ class DumpViewModel(app: Application) : AndroidViewModel(app) {
         addLog("已选择二进制文件：$path")
         detectBinary(path)
         _binaryFormat.value?.let { addLog("文件格式：$it") }
+        // 自动在同目录查找 global-metadata.dat
+        autoResolveMetadata(path)
     }
 
     fun setMetadataPath(path: String) {
@@ -171,6 +197,32 @@ class DumpViewModel(app: Application) : AndroidViewModel(app) {
         _metadataFormat.value?.let { addLog("文件格式：$it") }
     }
 
+    /** 在 binaryPath 同目录下扫描 global-metadata.dat，找到则自动填入 */
+    private fun autoResolveMetadata(binaryPathStr: String) {
+        val binDir = File(binaryPathStr).parentFile ?: return
+        val candidates = binDir.listFiles { f ->
+            f.isFile && f.name.lowercase().contains("global-metadata")
+        } ?: emptyArray()
+        if (candidates.isEmpty()) return
+        val best = candidates.firstOrNull { it.name == "global-metadata.dat" }
+            ?: candidates.firstOrNull()
+        if (best != null) {
+            val existing = _metadataPath.value
+            if (existing.isNullOrBlank() || !File(existing).exists()) {
+                _metadataPath.value = best.absolutePath
+                prefs.edit().putString("metadata_path", best.absolutePath).apply()
+                addLog("自动找到 metadata：${best.absolutePath}")
+                detectMetadata(best.absolutePath)
+            }
+        }
+    }
+
+    fun toggleSettingsCollapsed() {
+        val next = !_settingsCollapsed.value
+        _settingsCollapsed.value = next
+        prefs.edit().putBoolean("settings_collapsed", next).apply()
+    }
+
     fun addLog(msg: String) {
         synchronized(logBuffer) {
             logBuffer.add(msg)
@@ -180,6 +232,15 @@ class DumpViewModel(app: Application) : AndroidViewModel(app) {
     fun clearLogs() {
         flushLogs()
         _logs.value = emptyList()
+    }
+
+    /** 清除已保存的 CodeRegistration / MetadataRegistration（换游戏时使用） */
+    fun clearRegistrationCache() {
+        prefs.edit().remove("code_reg").remove("meta_reg").apply()
+        _pendingCodeReg = null
+        inputQueue.clear()
+        _hasCachedReg.value = false
+        addLog("已清除已保存的注册地址")
     }
 
     fun startDump() {
@@ -196,6 +257,7 @@ class DumpViewModel(app: Application) : AndroidViewModel(app) {
 
         _state.value = DumpState.DUMPING
         _outputPath.value = null
+        resetInputQueue()
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -260,16 +322,24 @@ class DumpViewModel(app: Application) : AndroidViewModel(app) {
 
     /** 引擎请求输入时由 UI 提交 */
     fun submitInput(text: String) {
-        // 如果是 ManualAddresses 第一步（CodeReg），保存供第二步使用
         val current = _inputRequest.value
-        if (current is InputRequest.ManualAddresses && current.step == InputRequest.ManualAddresses.Step.CODE_REG) {
-            _pendingCodeReg = text
+        if (current is InputRequest.ManualAddresses) {
+            when (current.step) {
+                InputRequest.ManualAddresses.Step.CODE_REG -> {
+                    _pendingCodeReg = text
+                    // 持久化，下次自动注入
+                    prefs.edit().putString("code_reg", text).apply()
+                }
+                InputRequest.ManualAddresses.Step.META_REG -> {
+                    // 持久化 MetadataRegistration
+                    prefs.edit().putString("meta_reg", text).apply()
+                }
+            }
         }
         inputQueue.offer(text)
     }
 
     fun cancelInput() {
-        // 取消时清除两步流程的中间状态
         _pendingCodeReg = null
         inputQueue.offer("")
     }

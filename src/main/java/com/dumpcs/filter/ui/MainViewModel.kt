@@ -575,4 +575,40 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val visibleCount: Int = 200,
         val error: String? = null
     )
+
+    /** 返回已解析的全部类（供浏览页使用） */
+    fun getAllClasses(): List<ClassInfo> = allClasses
+
+    /** 按类名+方法/字段索引查找并返回 DumpMember，用于结果页详情面板 */
+    fun getDumpMemberById(typeName: String, memberIndex: Int): com.dumpcs.filter.data.DumpMember? {
+        return allClasses
+            .firstOrNull { it.className == typeName || it.fullName == typeName }
+            ?.let { cls ->
+                val totalMembers = cls.methods.size + cls.fields.size
+                val idx = memberIndex.coerceIn(0, totalMembers - 1)
+                if (idx < cls.methods.size) {
+                    val m = cls.methods[idx]
+                    com.dumpcs.filter.data.DumpMember(
+                        kind = com.dumpcs.filter.data.MemberKind.Method,
+                        name = m.name,
+                        signature = m.rawLine,
+                        details = m.rawLine,
+                        rva = m.rva.toULongOrNull() ?: 0u,
+                        offset = m.offset.toULongOrNull() ?: 0u,
+                        va = m.va.toULongOrNull() ?: 0u
+                    )
+                } else {
+                    val f = cls.fields[idx - cls.methods.size]
+                    com.dumpcs.filter.data.DumpMember(
+                        kind = com.dumpcs.filter.data.MemberKind.Field,
+                        name = f.name,
+                        signature = f.rawLine,
+                        details = f.rawLine,
+                        rva = 0u,
+                        offset = f.offset.toULongOrNull() ?: 0u,
+                        va = 0u
+                    )
+                }
+            }
+    }
 }

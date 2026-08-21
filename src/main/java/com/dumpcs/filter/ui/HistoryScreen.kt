@@ -17,7 +17,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.dumpcs.filter.data.HistoryEntity
 import com.dumpcs.filter.ui.Screen
@@ -34,6 +33,25 @@ fun HistoryScreen(navController: NavController, viewModel: MainViewModel) {
     val files by viewModel.exportedFiles.collectAsStateWithLifecycle()
     var showClearDialog by remember { mutableStateOf(false) }
     var selectedTab by remember { mutableStateOf(0) }
+    var sortBy by remember { mutableStateOf("newest") }
+    var filterKeyword by remember { mutableStateOf("") }
+
+    val filteredHistory = remember(history, sortBy, filterKeyword) {
+        var list = history
+        if (filterKeyword.isNotBlank()) {
+            list = list.filter { h ->
+                h.keywords.contains(filterKeyword, ignoreCase = true) ||
+                    h.fileName.contains(filterKeyword, ignoreCase = true)
+            }
+        }
+        list = when (sortBy) {
+            "newest" -> list.sortedByDescending { it.timestamp }
+            "oldest" -> list.sortedBy { it.timestamp }
+            "results" -> list.sortedByDescending { it.resultCount }
+            else -> list.sortedByDescending { it.timestamp }
+        }
+        list
+    }
 
     Scaffold(
         topBar = {
@@ -60,9 +78,48 @@ fun HistoryScreen(navController: NavController, viewModel: MainViewModel) {
                 Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("导出文件") })
             }
 
-            when (selectedTab) {
-                0 -> HistoryList(history = history, viewModel = viewModel, navController = navController)
-                1 -> FileList(files = files, navController = navController, viewModel = viewModel)
+            if (selectedTab == 0) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = filterKeyword,
+                        onValueChange = { filterKeyword = it },
+                        modifier = Modifier.weight(1f),
+                        placeholder = { Text("搜索关键词/文件名") },
+                        singleLine = true,
+                        leadingIcon = { Icon(Icons.Default.Search, null) },
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    var showSortMenu by remember { mutableStateOf(false) }
+                    Box {
+                        FilterChip(
+                            selected = false,
+                            onClick = { showSortMenu = true },
+                            label = { Text("排序: $sortBy") },
+                            leadingIcon = { Icon(Icons.Default.Sort, null, modifier = Modifier.size(16.dp)) }
+                        )
+                        DropdownMenu(
+                            expanded = showSortMenu,
+                            onDismissRequest = { showSortMenu = false }
+                        ) {
+                            listOf("newest" to "最新优先", "oldest" to "最早优先", "results" to "结果最多").forEach { (value, label) ->
+                                DropdownMenuItem(
+                                    text = { Text(label) },
+                                    onClick = {
+                                        sortBy = value
+                                        showSortMenu = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+                HistoryList(history = filteredHistory, viewModel = viewModel, navController = navController)
+            } else {
+                FileList(files = files, navController = navController, viewModel = viewModel)
             }
         }
     }

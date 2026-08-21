@@ -73,7 +73,10 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
         val allGranted = permissions.entries.all { it.value }
-        if (!allGranted) {
+        if (allGranted) {
+            val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
+            prefs.edit().putBoolean("permission_granted_toast_shown", true).apply()
+        } else {
             Toast.makeText(this, "需要存储权限才能导出文件", Toast.LENGTH_LONG).show()
         }
     }
@@ -223,9 +226,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        // 从设置页返回后检查授权状态
+        // 从设置页返回后检查授权状态，仅在首次授予时提示一次
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && Environment.isExternalStorageManager()) {
-            Toast.makeText(this, "已获得所有文件访问权限", Toast.LENGTH_SHORT).show()
+            val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
+            if (!prefs.getBoolean("permission_granted_toast_shown", false)) {
+                Toast.makeText(this, "已获得所有文件访问权限", Toast.LENGTH_SHORT).show()
+                prefs.edit().putBoolean("permission_granted_toast_shown", true).apply()
+            }
         }
     }
 }

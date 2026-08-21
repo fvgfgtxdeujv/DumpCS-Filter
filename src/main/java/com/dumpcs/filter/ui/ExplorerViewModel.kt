@@ -40,6 +40,9 @@ class ExplorerViewModel(app: Application) : AndroidViewModel(app) {
     private val _ui = MutableStateFlow(ExplorerUiState())
     val ui = _ui.asStateFlow()
 
+    private val _loadProgress = MutableStateFlow(0f)
+    val loadProgress = _loadProgress.asStateFlow()
+
     private val dataStore = app.favoritesDataStore
 
     private val favTypesKey = stringSetPreferencesKey("favorite_types")
@@ -168,6 +171,7 @@ auto evt = klass.GetEvent("${'$'}{memberName}");
 
     fun loadDump(uri: Uri) {
         _ui.value = ExplorerUiState(isLoading = true)
+        _loadProgress.value = 0f
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -175,7 +179,7 @@ auto evt = klass.GetEvent("${'$'}{memberName}");
                 cr.openInputStream(uri).use { input ->
                     requireNotNull(input) { "无法打开文件" }
                     input.bufferedReader().use { reader ->
-                        val parsed = DumpTreeParser.parse(reader)
+                        val parsed = DumpTreeParser.parse(reader) { p -> _loadProgress.value = p }
                         _ui.value = ExplorerUiState(isLoading = false, types = parsed)
                     }
                 }
@@ -188,9 +192,12 @@ auto evt = klass.GetEvent("${'$'}{memberName}");
     /** 从本地路径加载（支持 Dump 页产出的 dump.cs 直接浏览） */
     fun loadDumpByPath(path: String) {
         _ui.value = ExplorerUiState(isLoading = true)
+        _loadProgress.value = 0f
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val parsed = java.io.File(path).bufferedReader().use { DumpTreeParser.parse(it) }
+                val parsed = java.io.File(path).bufferedReader().use { reader ->
+                    DumpTreeParser.parse(reader) { p -> _loadProgress.value = p }
+                }
                 _ui.value = ExplorerUiState(isLoading = false, types = parsed)
             } catch (t: Throwable) {
                 _ui.value = ExplorerUiState(isLoading = false, error = t.message ?: "解析失败")

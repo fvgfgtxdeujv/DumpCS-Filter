@@ -2,6 +2,7 @@ package com.dumpcs.filter.ui
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -13,16 +14,15 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.dumpcs.filter.data.ClassInfo
+import com.dumpcs.filter.data.DumpMember
 import com.dumpcs.filter.ui.MainViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -31,6 +31,8 @@ fun ResultsScreen(navController: NavController, viewModel: MainViewModel) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val result = uiState.filterResult
+    var selectedClass by remember { mutableStateOf<ClassInfo?>(null) }
+    var selectedMemberIdx by remember { mutableStateOf<Int?>(null) }
 
     Scaffold(
         topBar = {
@@ -64,7 +66,6 @@ fun ResultsScreen(navController: NavController, viewModel: MainViewModel) {
         }
     ) { padding ->
         when {
-            // 过滤进行中：显示加载状态（避免误报"无结果"）
             isLoading -> {
                 Column(
                     modifier = Modifier.fillMaxSize().padding(padding),
@@ -76,7 +77,6 @@ fun ResultsScreen(navController: NavController, viewModel: MainViewModel) {
                     Text("正在筛选 ${uiState.totalClasses} 个类...", style = MaterialTheme.typography.bodyMedium)
                 }
             }
-            // 尚未筛选（无结果数据）：引导回首页
             result == null -> {
                 EmptyResults(
                     modifier = Modifier.padding(padding),
@@ -85,7 +85,6 @@ fun ResultsScreen(navController: NavController, viewModel: MainViewModel) {
                     notFilteredYet = true
                 )
             }
-            // 筛选完成但无匹配
             result.classes.isEmpty() -> {
                 EmptyResults(
                     modifier = Modifier.padding(padding),
@@ -93,7 +92,6 @@ fun ResultsScreen(navController: NavController, viewModel: MainViewModel) {
                     keywords = result.keywords
                 )
             }
-            // 有结果：分页展示（每页 200 条，懒加载不卡）
             else -> {
                 ResultList(
                     result = result,
@@ -103,10 +101,25 @@ fun ResultsScreen(navController: NavController, viewModel: MainViewModel) {
                     onExplain = { cls ->
                         viewModel.prepareExplain(cls)
                         navController.navigate(com.dumpcs.filter.ui.Screen.AiChat.route)
+                    },
+                    onMemberClick = { cls, idx ->
+                        selectedClass = cls
+                        selectedMemberIdx = idx
                     }
                 )
             }
         }
+    }
+
+    selectedClass?.let { cls ->
+        selectedMemberIdx?.let { idx ->
+            val member = viewModel.getDumpMemberById(cls.className, idx)
+                ?: viewModel.getDumpMemberById(cls.fullName, idx)
+            member?.let { m ->
+                MemberDetailDialog(member = m, typeName = cls.className, onDismiss = { selectedMemberIdx = null })
+            }
+        }
+        if (selectedMemberIdx == null) selectedClass = null
     }
 }
 
@@ -116,34 +129,26 @@ fun ResultList(
     visibleCount: Int = 200,
     onLoadMore: () -> Unit = {},
     modifier: Modifier = Modifier,
-    onExplain: (ClassInfo) -> Unit = {}
+    onExplain: (ClassInfo) -> Unit = {},
+    onMemberClick: (ClassInfo, Int) -> Unit = { _, _ -> }
 ) {
-    val pageSize = 200
-    // visibleCount 存 ViewModel：点进 AI 解释再返回，加载进度不丢（不用重新点加载更多）
     val visible = result.classes.take(visibleCount)
-
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        item {
-            ResultSummaryCard(result)
-        }
-        // key 用索引：dump.cs 多程序集合并存在同名类（如 #Object x2），
-        // 用 namespace#className 作 key 会重复 → 滚动渲染时崩溃闪退
+        item { ResultSummaryCard(result) }
         items(visible.size) { index ->
             val cls = visible[index]
-            ClassCard(classInfo = cls, onExplain = { onExplain(cls) })
+            ClassCard(classInfo = cls, onExplain = { onExplain(cls) }, onMemberClick = onMemberClick)
         }
         if (visibleCount < result.classes.size) {
             item {
                 FilledTonalButton(
                     onClick = onLoadMore,
                     modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
-                ) {
-                    Text("加载更多（还剩 ${result.classes.size - visibleCount} 条）")
-                }
+                ) { Text("加载更多（还剩 ${result.classes.size - visibleCount} 条）") }
             }
         }
         item { Spacer(modifier = Modifier.height(32.dp)) }
@@ -155,9 +160,7 @@ fun ResultSummaryCard(result: com.dumpcs.filter.data.FilterResult) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer
-        )
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text("筛选概览", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
@@ -168,17 +171,8 @@ fun ResultSummaryCard(result: com.dumpcs.filter.data.FilterResult) {
             }
             if (result.excludedHint.isNotBlank()) {
                 Spacer(modifier = Modifier.height(8.dp))
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = MaterialTheme.colorScheme.tertiaryContainer,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = result.excludedHint,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onTertiaryContainer,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
-                    )
+                Surface(shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.tertiaryContainer, modifier = Modifier.fillMaxWidth()) {
+                    Text(result.excludedHint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onTertiaryContainer, modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp))
                 }
             }
         }
@@ -194,12 +188,9 @@ fun InfoItem(label: String, value: String) {
 }
 
 @Composable
-fun ClassCard(classInfo: ClassInfo, onExplain: (ClassInfo) -> Unit = {}) {
+fun ClassCard(classInfo: ClassInfo, onExplain: (ClassInfo) -> Unit = {}, onMemberClick: (ClassInfo, Int) -> Unit = { _, _ -> }) {
     var expanded by remember { mutableStateOf(false) }
-    val rotation by animateFloatAsState(
-        targetValue = if (expanded) 180f else 0f,
-        animationSpec = tween(300)
-    )
+    val rotation by animateFloatAsState(targetValue = if (expanded) 180f else 0f, animationSpec = tween(300))
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -207,65 +198,33 @@ fun ClassCard(classInfo: ClassInfo, onExplain: (ClassInfo) -> Unit = {}) {
         onClick = { expanded = !expanded }
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
+                    Text(classInfo.fullName, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     Text(
-                        classInfo.fullName,
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        if (classInfo.parentClass.isNotBlank()) {
-                            "${classInfo.namespace.ifBlank { "(无命名空间)" }} : ${classInfo.parentClass}"
-                        } else {
-                            classInfo.namespace.ifBlank { "(无命名空间)" }
-                        },
+                        if (classInfo.parentClass.isNotBlank()) "${classInfo.namespace.ifBlank { "(无命名空间)" }} : ${classInfo.parentClass}"
+                        else classInfo.namespace.ifBlank { "(无命名空间)" },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                BadgedBox(
-                    badge = {
-                        if (classInfo.methods.isNotEmpty()) {
-                            Badge { Text("${classInfo.methods.size}") }
-                        }
-                    }
-                ) {
+                BadgedBox(badge = { if (classInfo.methods.isNotEmpty()) Badge { Text("${classInfo.methods.size}") } }) {
                     Icon(Icons.Default.Code, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                 }
                 Spacer(modifier = Modifier.width(8.dp))
-                Icon(
-                    imageVector = Icons.Default.ExpandMore,
-                    contentDescription = null,
-                    modifier = Modifier.rotate(rotation),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Icon(Icons.Default.ExpandMore, contentDescription = null, modifier = Modifier.rotate(rotation), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
 
-            AnimatedVisibility(
-                visible = expanded,
-                enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut()
-            ) {
+            AnimatedVisibility(visible = expanded, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
                 Column(modifier = Modifier.padding(top = 12.dp)) {
-                    // AI 解释入口（猫娘讲解这个类是干什么的、有什么用）
                     FilledTonalButton(
                         onClick = { onExplain(classInfo) },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        Icon(
-                            Icons.Default.Pets,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
+                        Icon(Icons.Default.Pets, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("AI 解释（猫娘讲解）", fontWeight = FontWeight.Medium)
                     }
@@ -274,54 +233,32 @@ fun ClassCard(classInfo: ClassInfo, onExplain: (ClassInfo) -> Unit = {}) {
                         Text("字段（含偏移量）", fontWeight = FontWeight.Medium, style = MaterialTheme.typography.labelLarge)
                         Spacer(modifier = Modifier.height(4.dp))
                         classInfo.fields.forEach { field ->
-                            Row(modifier = Modifier.fillMaxWidth()) {
-                                Text(
-                                    "• ${field.name}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                if (field.offset.isNotBlank()) {
-                                    Text(
-                                        field.offset,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.tertiary,
-                                        fontWeight = FontWeight.Medium
-                                    )
+                            Column(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp).clickable { onMemberClick(classInfo, classInfo.methods.size + classInfo.fields.indexOf(field)) }) {
+                                Row(modifier = Modifier.fillMaxWidth()) {
+                                    Text("• ${field.name}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                                    if (field.offset.isNotBlank()) {
+                                        Text(field.offset, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary, fontWeight = FontWeight.Medium)
+                                    }
                                 }
                             }
                         }
                         Spacer(modifier = Modifier.height(8.dp))
                     }
-
                     if (classInfo.methods.isNotEmpty()) {
                         Text("方法（RVA / Offset / VA）", fontWeight = FontWeight.Medium, style = MaterialTheme.typography.labelLarge)
                         Spacer(modifier = Modifier.height(4.dp))
                         classInfo.methods.forEach { method ->
-                            Column(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                            Column(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp).clickable { onMemberClick(classInfo, classInfo.methods.indexOf(method)) }) {
                                 Row(modifier = Modifier.fillMaxWidth()) {
-                                    Text(
-                                        "• ${method.name}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    Text(
-                                        method.rva,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        fontWeight = FontWeight.Medium
-                                    )
+                                    Text("• ${method.name}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                                    Text(method.rva, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
                                 }
                                 val addrParts = buildList {
                                     if (method.offset.isNotBlank()) add("Off ${method.offset}")
                                     if (method.va.isNotBlank()) add("VA ${method.va}")
                                 }
                                 if (addrParts.isNotEmpty()) {
-                                    Text(
-                                        addrParts.joinToString("  "),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.tertiary
-                                    )
+                                    Text(addrParts.joinToString("  "), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
                                 }
                             }
                         }
@@ -329,6 +266,37 @@ fun ClassCard(classInfo: ClassInfo, onExplain: (ClassInfo) -> Unit = {}) {
                 }
             }
         }
+    }
+}
+
+@Composable
+fun MemberDetailDialog(member: DumpMember, typeName: String, onDismiss: () -> Unit) {
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    fun copyText(text: String) { clipboard.setText(androidx.compose.ui.text.AnnotatedString(text)) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = { TextButton(onClick = onDismiss) { Text("关闭") } },
+        title = { Text("成员详情") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                InfoRow("类型", typeName)
+                InfoRow("种类", member.kind.name)
+                InfoRow("名称", member.name)
+                InfoRow("签名", member.signature.ifBlank { member.details })
+                InfoRow("RVA", "0x${member.rva.toString(16)}", onCopy = { copyText("0x${member.rva.toString(16)}") })
+                InfoRow("Offset", "0x${member.offset.toString(16)}", onCopy = { copyText("0x${member.offset.toString(16)}") })
+                InfoRow("VA", "0x${member.va.toString(16)}", onCopy = { copyText("0x${member.va.toString(16)}") })
+            }
+        }
+    )
+}
+
+@Composable
+fun InfoRow(label: String, value: String, onCopy: (() -> Unit)? = null) {
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(64.dp))
+        Text(value, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        onCopy?.let { TextButton(onClick = it) { Text("复制") } }
     }
 }
 
@@ -344,12 +312,7 @@ fun EmptyResults(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Icon(
-            imageVector = Icons.Outlined.SearchOff,
-            contentDescription = null,
-            modifier = Modifier.size(80.dp),
-            tint = MaterialTheme.colorScheme.outlineVariant
-        )
+        Icon(Icons.Outlined.SearchOff, contentDescription = null, modifier = Modifier.size(80.dp), tint = MaterialTheme.colorScheme.outlineVariant)
         Spacer(modifier = Modifier.height(16.dp))
         Text(
             if (notFilteredYet) "还没有筛选结果" else "未找到匹配结果",
@@ -358,41 +321,21 @@ fun EmptyResults(
         )
         Spacer(modifier = Modifier.height(8.dp))
         if (notFilteredYet) {
-            Text(
-                "请先返回首页选择关键词或使用 AI 智能搜索",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.outlineVariant,
-                textAlign = TextAlign.Center
-            )
+            Text("请先返回首页选择关键词或使用 AI 智能搜索", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outlineVariant, textAlign = TextAlign.Center)
         } else if (totalClasses > 0) {
-            Text(
-                "已解析 $totalClasses 个类，关键词 [${keywords.joinToString(", ")}] 无匹配",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.outlineVariant,
-                textAlign = TextAlign.Center
-            )
+            Text("已解析 $totalClasses 个类，关键词 [${keywords.joinToString(", ")}] 无匹配", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outlineVariant, textAlign = TextAlign.Center)
         } else {
-            Text(
-                "请先返回首页加载 dump.cs 文件并筛选",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.outlineVariant
-            )
+            Text("请先返回首页加载 dump.cs 文件并筛选", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outlineVariant)
         }
         Spacer(modifier = Modifier.height(16.dp))
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.tertiaryContainer
-            )
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Default.AutoAwesome,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
+                    Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("AI 建议", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                 }

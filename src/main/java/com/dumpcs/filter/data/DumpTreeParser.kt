@@ -40,7 +40,7 @@ object DumpTreeParser {
 
     private fun parseHex(s: String): ULong = s.toULong(16)
 
-    fun parse(reader: BufferedReader): List<DumpType> {
+    fun parse(reader: BufferedReader, onProgress: (Float) -> Unit = {}): List<DumpType> {
         val types = ArrayList<DumpType>()
         val membersByType = ArrayList<MutableList<DumpMember>>()
 
@@ -55,8 +55,11 @@ object DumpTreeParser {
         var pendingOff = 0uL
         var pendingVa = 0uL
 
+        var lineNum = 0
         reader.forEachLine { raw ->
             val s = raw.trim()
+            lineNum++
+            if (lineNum % 3000 == 0) onProgress(0.3f + 0.6f * (lineNum % 50000) / 50000f)
 
             rxImage.find(s)?.let {
                 val assembly = it.groupValues[1].trim()
@@ -214,6 +217,7 @@ object DumpTreeParser {
             }
         }
 
+        onProgress(1f)
         return types.mapIndexed { i, t -> t.copy(members = membersByType[i]) }
     }
 }

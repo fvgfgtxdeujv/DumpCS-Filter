@@ -49,8 +49,9 @@ fun DumpScreen(navController: NavController, dumpViewModel: DumpViewModel, mainV
     val outputPath by dumpViewModel.outputPath.collectAsStateWithLifecycle()
     val saveDir by dumpViewModel.saveDir.collectAsStateWithLifecycle()
     val inputRequest by dumpViewModel.inputRequest.collectAsStateWithLifecycle()
+    val hasCachedReg by dumpViewModel.hasCachedReg.collectAsStateWithLifecycle()
 
-    var showSettings by remember { mutableStateOf(true) }
+    val showSettings by dumpViewModel.settingsCollapsed.collectAsStateWithLifecycle()
     var showDirDialog by remember { mutableStateOf(false) }
     var savedToast by remember { mutableStateOf<String?>(null) }
 
@@ -128,6 +129,25 @@ fun DumpScreen(navController: NavController, dumpViewModel: DumpViewModel, mainV
                         onDismiss = { showMetadataManual = false }
                     )
                 }
+                if (hasCachedReg) {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "注册地址已缓存（下次自动填充，无需手动输入）",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        TextButton(
+                            onClick = { dumpViewModel.clearRegistrationCache() },
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(4.dp)
+                        ) { Text("清除", style = MaterialTheme.typography.labelSmall) }
+                    }
+                }
             }
 
             item {
@@ -165,7 +185,7 @@ fun DumpScreen(navController: NavController, dumpViewModel: DumpViewModel, mainV
                         Row(
                             Modifier
                                 .fillMaxWidth()
-                                .clickable { showSettings = !showSettings },
+                                .clickable { dumpViewModel.toggleSettingsCollapsed() },
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text("③ Dump 设置（完全版）", fontWeight = FontWeight.Bold)
@@ -174,7 +194,7 @@ fun DumpScreen(navController: NavController, dumpViewModel: DumpViewModel, mainV
                                 contentDescription = null
                             )
                         }
-                        if (showSettings) {
+                        if (!showSettings) {
                             SectionTitle("输出内容")
                             SettingsSwitch("dumpMethod", "方法", dumpViewModel)
                             SettingsSwitch("dumpField", "字段", dumpViewModel)
@@ -209,6 +229,16 @@ fun DumpScreen(navController: NavController, dumpViewModel: DumpViewModel, mainV
                             SettingsSwitch("forceDump", "强制 Dump", dumpViewModel)
                             SettingsSwitch("noRedirectedPointer", "不使用重定向指针", dumpViewModel)
                             SettingsSwitch("splitDumpPerType", "按类型拆分输出", dumpViewModel)
+                            SettingsSwitch("dumpStaticFieldMetadata", "静态字段元数据", dumpViewModel)
+                            SettingsSwitch("dumpFieldRvaData", "字段 RVA 数据", dumpViewModel)
+                            if (dumpViewModel.config.getBool("dumpFieldRvaData")) {
+                                NumberInput(
+                                    label = "最大 RVA 字节数",
+                                    placeholder = "如 64",
+                                    value = dumpViewModel.config.getInt("maxFieldRvaDumpBytes").toDouble(),
+                                    onValue = { dumpViewModel.config.setInt("maxFieldRvaDumpBytes", it.toInt()) }
+                                )
+                            }
 
                             SectionTitle("泛型 Dump")
                             SettingsSwitch("generateGenericsDump", "生成泛型 Dump", dumpViewModel)

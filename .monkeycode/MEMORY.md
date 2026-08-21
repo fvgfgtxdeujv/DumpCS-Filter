@@ -57,6 +57,9 @@ This file records user instructions, preferences, and teachings for reference in
   - Gradle Wrapper 已随仓分发，使用 ./gradlew 执行构建
   - local.properties 需配置 sdk.dir 和 ndk.dir
   - SDK 组件：platforms;android-34, build-tools;34.0.0, platform-tools, ndk;26.1.10909125
+  - JDK 必须使用 openjdk-17-jdk（非 jre-headless），否则 jlink 缺失会导致 assemble 失败
+  - 安装命令：DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends openjdk-17-jdk-headless
+  - jlink 路径：/usr/lib/jvm/java-17-openjdk-amd64/bin/jlink
 
 [Project Knowledge Summary]
 - Date: 2026-08-21
@@ -89,3 +92,14 @@ This file records user instructions, preferences, and teachings for reference in
   - 建议先采用策略 A（仅混淆引擎 so），验证效果后再考虑全量混淆
   - 现代替代方案 Amice（fuqiuluo/amice）支持 LLVM 11-22，可通过 -fpass-plugin 与 NDK r26 配合使用
   - 接入前需准备：下载 OLLVM NDK r25c、修改 local.properties、集成编译参数、更新 CI workflow
+
+[Project Knowledge Summary]
+- Date: 2026-08-21
+- Context: 反编译参考 APK（game_dump.apk）并对比实现差异
+- Category: Troubleshooting & Debugging
+- Instructions:
+  - 参考 APK 路径：/tmp/game_dump.apk，反编译结果在 /tmp/game_dump_decompiled/
+  - APK 版本：7.0，package：com.rodroid.il2cppdumper，minSdk=26，targetSdk=36
+  - 从参考 APK 中发现并新增的配置项：dumpStaticFieldMetadata、dumpFieldRvaData、maxFieldRvaDumpBytes
+  - 参考 APK 的 Preferences 共有约 50 个配置键，已全部对齐到 DumperConfig.kt 和 DumpScreen.kt
+  - 关键 smali 文件：DumperViewModel.smali（4850行）、DumperConfig.smali、Preferences.smali

@@ -108,7 +108,7 @@ fun MainTabsScreen(
                 .padding(innerPadding)
         ) { page ->
             when (page) {
-                0 -> HomeScreen(navController = navController, viewModel = viewModel)
+                0 -> SearchBrowseScreen(navController = navController, viewModel = viewModel, explorerViewModel = explorerViewModel)
                 1 -> DumpScreen(
                     navController = navController,
                     dumpViewModel = dumpViewModel,
